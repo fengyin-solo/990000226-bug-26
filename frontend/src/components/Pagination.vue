@@ -1,7 +1,7 @@
 <template>
   <div class="pagination-wrapper" v-if="total > 0">
     <el-pagination
-      v-model:current-page="currentPage"
+      :current-page="modelValue"
       :page-size="pageSize"
       :total="total"
       layout="prev, pager, next, total"
@@ -11,9 +11,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-
-const props = defineProps({
+defineProps({
   total: {
     type: Number,
     default: 0
@@ -30,14 +28,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
-const currentPage = ref(props.modelValue)
-
-watch(() => props.modelValue, (newVal) => {
-  currentPage.value = newVal
-})
-
+// 完全受控：当前页只由父级的 modelValue 决定，不在此组件内另存一份，
+// 避免父级程序化改页（如删除后页码回退）时分页器显示与实际页脱节。
 function handlePageChange(page) {
-  currentPage.value = page
   emit('update:modelValue', page)
   emit('change', page)
 }

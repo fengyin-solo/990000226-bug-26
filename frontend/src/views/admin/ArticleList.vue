@@ -6,9 +6,9 @@
         新建文章
       </el-button>
     </div>
-    
+
     <el-card>
-      <el-table :data="articles" v-loading="loading" style="width: 100%">
+      <el-table :data="store.articles" v-loading="store.loading" style="width: 100%">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="标题" min-width="200" />
         <el-table-column prop="tags" label="标签" width="250">
@@ -34,11 +34,11 @@
           </template>
         </el-table-column>
       </el-table>
-      
+
       <Pagination
-        v-model="currentPage"
-        :total="pagination.total"
-        :page-size="pagination.limit"
+        :model-value="store.currentPage"
+        :total="store.total"
+        :page-size="store.pageSize"
         @change="handlePageChange"
       />
     </el-card>
@@ -46,47 +46,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '../../api'
+import { useArticlesStore } from '../../stores/articles'
 import Pagination from '../../components/Pagination.vue'
 
 const router = useRouter()
-
-const articles = ref([])
-const loading = ref(false)
-const currentPage = ref(1)
-const pagination = ref({
-  total: 0,
-  page: 1,
-  limit: 10,
-  totalPages: 0
-})
+const store = useArticlesStore()
 
 onMounted(() => {
-  fetchArticles()
+  // 每次进入（含从编辑/新建返回、浏览器前进后退）都以服务端为准重新拉取，
+  // 确保删除、改标签等操作结果、总数与文章行一致，不残留已处理的文章。
+  store.fetchArticles()
 })
 
-async function fetchArticles() {
-  loading.value = true
-  try {
-    const response = await api.get('/articles', {
-      params: { page: currentPage.value, limit: pagination.value.limit }
-    })
-    articles.value = response.data.articles
-    pagination.value = response.data.pagination
-  } catch (error) {
-    console.error('Failed to fetch articles:', error)
-    ElMessage.error('获取文章列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 function handlePageChange(page) {
-  currentPage.value = page
-  fetchArticles()
+  store.setPage(page)
 }
 
 function goToCreate() {
@@ -108,15 +84,18 @@ async function deleteArticle(article) {
         type: 'warning'
       }
     )
-    
-    await api.delete(`/articles/${article.id}`)
+  } catch {
+    // 用户点击“取消”，不做任何处理
+    return
+  }
+
+  try {
+    // 删除与随后的列表刷新在 store 内串行执行，并带页码修正
+    await store.removeArticle(article.id)
     ElMessage.success('文章已删除')
-    fetchArticles()
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('Failed to delete article:', error)
-      ElMessage.error('删除文章失败')
-    }
+    console.error('Failed to delete article:', error)
+    ElMessage.error('删除文章失败')
   }
 }
 
