@@ -6,7 +6,7 @@
         新建文章
       </el-button>
     </div>
-    
+
     <el-card>
       <el-table :data="articles" v-loading="loading" style="width: 100%">
         <el-table-column prop="id" label="ID" width="80" />
@@ -34,9 +34,9 @@
           </template>
         </el-table-column>
       </el-table>
-      
+
       <Pagination
-        v-model="currentPage"
+        v-model="pageModel"
         :total="pagination.total"
         :page-size="pagination.limit"
         @change="handlePageChange"
@@ -46,47 +46,33 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 import Pagination from '../../components/Pagination.vue'
+import { useAdminArticlesStore } from '../../stores/articles'
 
 const router = useRouter()
+const store = useAdminArticlesStore()
 
-const articles = ref([])
-const loading = ref(false)
-const currentPage = ref(1)
-const pagination = ref({
-  total: 0,
-  page: 1,
-  limit: 10,
-  totalPages: 0
+const { articles, loading, pagination } = storeToRefs(store)
+
+// Bridge the controlled Pagination (v-model) to the shared store's page.
+const pageModel = computed({
+  get: () => store.page,
+  set: (value) => { store.page = value }
 })
 
+// Every (re)entry refetches the current shared page, so rows/total never carry
+// stale data after deleting, tagging in the editor, or returning to this view.
 onMounted(() => {
-  fetchArticles()
+  store.fetchList()
 })
-
-async function fetchArticles() {
-  loading.value = true
-  try {
-    const response = await api.get('/articles', {
-      params: { page: currentPage.value, limit: pagination.value.limit }
-    })
-    articles.value = response.data.articles
-    pagination.value = response.data.pagination
-  } catch (error) {
-    console.error('Failed to fetch articles:', error)
-    ElMessage.error('获取文章列表失败')
-  } finally {
-    loading.value = false
-  }
-}
 
 function handlePageChange(page) {
-  currentPage.value = page
-  fetchArticles()
+  store.changePage(page)
 }
 
 function goToCreate() {
@@ -108,10 +94,11 @@ async function deleteArticle(article) {
         type: 'warning'
       }
     )
-    
+
     await api.delete(`/articles/${article.id}`)
     ElMessage.success('文章已删除')
-    fetchArticles()
+    // Single place that updates rows, total and page after a delete.
+    await store.articleDeleted(article.id)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Failed to delete article:', error)

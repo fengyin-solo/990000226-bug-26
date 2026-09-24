@@ -1,7 +1,7 @@
 <template>
   <div class="pagination-wrapper" v-if="total > 0">
     <el-pagination
-      v-model:current-page="currentPage"
+      :current-page="modelValue"
       :page-size="pageSize"
       :total="total"
       layout="prev, pager, next, total"
@@ -11,8 +11,6 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-
 const props = defineProps({
   total: {
     type: Number,
@@ -30,14 +28,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
-const currentPage = ref(props.modelValue)
-
-watch(() => props.modelValue, (newVal) => {
-  currentPage.value = newVal
-})
-
+// Fully controlled: the parent owns the current page, so the pager can never
+// disagree with the list it paginates (e.g. after a delete or on re-entry).
 function handlePageChange(page) {
-  currentPage.value = page
+  if (page === props.modelValue) return
   emit('update:modelValue', page)
   emit('change', page)
 }
